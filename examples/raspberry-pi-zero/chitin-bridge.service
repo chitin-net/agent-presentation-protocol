@@ -1,0 +1,22 @@
+[Unit]
+Description=APP Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/chitin-bridge
+Environment=BRIDGE_TOKEN=YOUR_BRIDGE_TOKEN
+ExecStart=/usr/bin/python3 /home/pi/chitin-bridge/chitin_bridge.py
+Restart=always
+RestartSec=10
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/sys/class/gpio
+
+[Install]
+WantedBy=multi-user.target

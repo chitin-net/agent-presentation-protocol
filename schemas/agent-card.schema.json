@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chitin.net/protocol/schemas/agent-card.json",
+  "title": "APP Agent Card",
+  "description": "Identity and capability declaration emitted at connection time by either an agent or a surface. Field applicability depends on which role is emitting: surface-only fields (surface_class, capabilities.initiation, capabilities.supports_presence) are populated only by surfaces; agent-only fields (initiation_profile, capabilities.tools, capabilities.sensor_events, device) are populated only by agents; most other fields apply to both roles. Aggregator-only fields (agent_role=aggregator, aggregates) are populated only by fleet aggregators. See SPEC.md §3.3 for the bidirectional emission lifecycle and §14 for fleet aggregators.",
+  "type": "object",
+  "required": ["protocol_version", "agent", "capabilities"],
+  "properties": {
+    "protocol_version": {
+      "type": "string",
+      "description": "Protocol version."
+    },
+    "agent": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "version": { "type": "string" },
+        "author": { "type": "string" }
+      }
+    },
+    "agent_role": {
+      "type": "string",
+      "enum": ["bridge", "aggregator"],
+      "default": "bridge",
+      "description": "Role this /ws/bridge connection plays. 'bridge' (default) provides events; 'aggregator' consumes bridge events via subscription (see SPEC.md §14.3). Omitting the field is equivalent to 'bridge'."
+    },
+    "device": {
+      "type": ["object", "null"],
+      "properties": {
+        "type": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "model": { "type": "string" },
+        "interaction_model": { "type": "string", "enum": ["standard", "headless"] },
+        "status": { "type": "object" },
+        "available_actions": { "type": "array" },
+        "fleet_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional fleet-membership tags for this bridge. Open taxonomy (well-known starter list: 'irrigation', 'hvac', 'lighting', 'security', 'vehicles', 'sensors', 'meters'; implementations may use any strings). Aggregators subscribe by tag-set intersection. See SPEC.md §14.5."
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "streaming": { "type": "boolean" },
+        "emotions": { "type": "array", "items": { "type": "string" } },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "read": { "type": "boolean" },
+            "write": { "type": "boolean" }
+          }
+        },
+        "input_accepts": { "type": "array", "items": { "type": "string" } },
+        "output_modalities": { "type": "array", "items": { "type": "string" } },
+        "audio_format": {
+          "type": "object",
+          "properties": {
+            "codec": { "type": "string" },
+            "sample_rate": { "type": "integer" },
+            "channels": { "type": "integer" }
+          }
+        },
+        "voice": {
+          "type": "object",
+          "description": "Voice capabilities. Agents declare TTS/STT providers they support; surfaces declare whether they can render synthesized voice and capture user voice input.",
+          "properties": {
+            "tts_provider": {
+              "type": "string",
+              "description": "Text-to-speech provider identifier. Common values: 'client' (use the surface's local TTS), 'cloud', 'elevenlabs', or a vendor-specific identifier."
+            },
+            "stt_provider": {
+              "type": "string",
+              "description": "Speech-to-text provider identifier. Common values: 'client', 'cloud', or a vendor-specific identifier."
+            }
+          }
+        },
+        "supports_presence": {
+          "type": "boolean",
+          "description": "Whether this surface broadcasts presence_update messages with attention-state, focus-state, or user-engagement signals. Surfaces with no presence sensing should set false; surfaces with any presence input (face tracking, motion sensors, focus mode integration, etc.) set true and broadcast accordingly. Agent-only Agent Cards should omit this field."
+        },
+        "artifacts": { "type": "boolean" },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "sensor_events": { "type": "array", "items": { "type": "string" } },
+        "initiation": {
+          "type": "object",
+          "description": "Surface-side initiation handling. See SPEC.md §13.",
+          "properties": {
+            "modes": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["immediate", "negotiated", "scheduled"] }
+            },
+            "respects_warrant": { "type": "boolean" },
+            "respects_if_unanswered": { "type": "boolean" },
+            "supports_structured_options": { "type": "boolean", "description": "Whether this surface can render agent_notification.options as discrete selectable choices and return chosen_option. When false or omitted, agents should expect free-text handling; options remain non-blocking regardless. See SPEC.md §4.13." },
+            "max_concurrent_pings": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "initiation_profile": {
+      "type": "object",
+      "description": "Agent-side initiation disclosure for informed-consent UI. See SPEC.md §13.",
+      "properties": {
+        "expected_warrants": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["user_authorized", "task_decision_required", "external_event", "unspecified"]
+          }
+        },
+        "expected_volume_per_day": { "type": "string" },
+        "typical_urgency": { "type": "string", "enum": ["low", "medium", "high"] },
+        "requires_response_typical": { "type": "boolean" }
+      }
+    },
+    "surface_class": {
+      "type": ["string", "null"],
+      "description": "Class identifier this surface belongs to. Well-known values: 'phone', 'tablet', 'watch', 'desktop', 'car' (in-vehicle surfaces — Apple CarPlay, Android Auto, in-vehicle infotainment, aftermarket head units), 'smart_speaker', 'kiosk', 'ambient'. Surface implementations may use additional class names. Null or omitted for agents (which send rather than receive initiations). Agents target surfaces by this class via `agent_notification.target_surface`. See SPEC.md §5.4 and §4.13."
+    },
+    "aggregates": {
+      "type": "object",
+      "description": "Fleet-context block. REQUIRED when agent_role='aggregator'; absent otherwise. Surfaces render the aggregator's headline fleet view ('Irrigation Spokesperson — 247 of 300 controllers online') from these fields. SPEC §14.6 describes refresh discipline (debounced ~30s on roster changes). The 'required when agent_role=aggregator' conditional is normative in SPEC §14.6 and not enforced via JSON Schema conditionals in v0.3.",
+      "required": ["fleet_tags", "members_total", "members_online"],
+      "properties": {
+        "fleet_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The tags this aggregator covers. Mirrors the subscription declaration in aggregator_subscribe (§14.4)."
+        },
+        "members_total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total fleet size including offline members."
+        },
+        "members_online": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Currently online members."
+        },
+        "last_member_change_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of the most recent bridge_online or bridge_offline event the aggregator observed. Surfaces may use this for stale-indicator UI."
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "methods": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=APP — Home Assistant Bridge
+After=network-online.target home-assistant@homeassistant.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=homeassistant
+WorkingDirectory=/home/homeassistant/chitin-bridge
+Environment=BRIDGE_TOKEN=YOUR_BRIDGE_TOKEN
+Environment=HA_URL=http://localhost:8123
+Environment=HA_TOKEN=YOUR_HA_LONG_LIVED_TOKEN
+ExecStart=/usr/bin/python3 /home/homeassistant/chitin-bridge/chitin_ha_bridge.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

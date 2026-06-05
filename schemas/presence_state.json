@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chitin.net/protocol/schemas/presence_state.json",
+  "title": "PresenceState",
+  "description": "Ambient state broadcast from an active surface to ambient consumers via /ws/ambient",
+  "type": "object",
+  "required": ["mood", "attention", "urgency", "personality_id", "agent_id", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "mood": {
+      "type": "string",
+      "enum": [
+        "neutral",
+        "happy",
+        "calm",
+        "curious",
+        "focused",
+        "playful",
+        "concerned",
+        "excited",
+        "tired",
+        "thoughtful",
+        "warm"
+      ]
+    },
+    "attention": {
+      "type": "string",
+      "enum": ["idle", "aware", "engaged", "speaking", "listening", "thinking"]
+    },
+    "activity": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "type": "string", "enum": ["chat", "task", "background", "none"] },
+            "label": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "urgency": {
+      "type": "string",
+      "enum": ["none", "low", "medium", "high"]
+    },
+    "last_message": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["encrypted_snippet", "from", "timestamp"],
+          "additionalProperties": false,
+          "properties": {
+            "encrypted_snippet": {
+              "type": "string",
+              "description": "Base64-encoded E2EE ciphertext; opaque to relay"
+            },
+            "from": { "type": "string", "enum": ["user", "agent"] },
+            "timestamp": { "type": "string", "format": "date-time" }
+          }
+        }
+      ]
+    },
+    "personality_id": { "type": "string" },
+    "agent_id": { "type": "string" },
+    "user_present": {
+      "type": ["boolean", "null"],
+      "description": "null = vision off; populated by vision input in Prompt 6"
+    },
+    "user_presence_confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

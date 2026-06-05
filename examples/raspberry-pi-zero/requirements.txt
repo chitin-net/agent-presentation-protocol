@@ -1,0 +1,4 @@
+websockets>=12.0
+RPi.GPIO>=0.7.1
+# Optional: DHT22 sensor support
+# adafruit-circuitpython-dht>=4.0.0

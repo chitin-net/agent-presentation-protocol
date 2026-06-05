@@ -1,0 +1,6 @@
+# APP — CircuitPython WiFi Settings
+# Copy this file to the CIRCUITPY drive as settings.toml
+
+CIRCUITPY_WIFI_SSID = "YOUR_WIFI_SSID"
+CIRCUITPY_WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"
+BRIDGE_TOKEN = "YOUR_BRIDGE_TOKEN"
