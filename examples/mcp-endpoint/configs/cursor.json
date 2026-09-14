@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "chitin": {
+      "url": "http://localhost:18790/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_CHITIN_API_KEY"
+      }
+    }
+  }
+}

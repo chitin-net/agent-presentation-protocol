@@ -1,0 +1,1505 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://chitin.net/protocol/schemas/messages.json",
+  "title": "APP Messages",
+  "description": "Schema definitions for all Agent Presentation Protocol message types",
+  "oneOf": [
+    { "$ref": "#/definitions/chat_message" },
+    { "$ref": "#/definitions/chat_stream_chunk" },
+    { "$ref": "#/definitions/chat_stream_end" },
+    { "$ref": "#/definitions/chat_response" },
+    { "$ref": "#/definitions/agent_card" },
+    { "$ref": "#/definitions/agent_card_request" },
+    { "$ref": "#/definitions/surface_agent_card" },
+    { "$ref": "#/definitions/surface_agent_card_removed" },
+    { "$ref": "#/definitions/motor_command" },
+    { "$ref": "#/definitions/sensor_event" },
+    { "$ref": "#/definitions/device_action" },
+    { "$ref": "#/definitions/audio_stream_start" },
+    { "$ref": "#/definitions/audio_chunk" },
+    { "$ref": "#/definitions/audio_stream_end" },
+    { "$ref": "#/definitions/memory_sync" },
+    { "$ref": "#/definitions/error" },
+    { "$ref": "#/definitions/system" },
+    { "$ref": "#/definitions/presence" },
+    { "$ref": "#/definitions/presence_update" },
+    { "$ref": "#/definitions/agent_notification" },
+    { "$ref": "#/definitions/agent_notification_response" },
+    { "$ref": "#/definitions/agent_notification_already_resolved" },
+    { "$ref": "#/definitions/agent_notification_late_response" },
+    { "$ref": "#/definitions/agent_initiated_message" },
+    { "$ref": "#/definitions/agent_initiated_message_response" },
+    { "$ref": "#/definitions/set_dnd" },
+    { "$ref": "#/definitions/artifact_create" },
+    { "$ref": "#/definitions/artifact_update" },
+    { "$ref": "#/definitions/artifact_request" },
+    { "$ref": "#/definitions/agent_list_request" },
+    { "$ref": "#/definitions/agent_list_response" },
+    { "$ref": "#/definitions/aggregator_subscribe" },
+    { "$ref": "#/definitions/presence_roster" },
+    { "$ref": "#/definitions/attention_floor" },
+    { "$ref": "#/definitions/file_upload" },
+    { "$ref": "#/definitions/file_upload_response" },
+    { "$ref": "#/definitions/file_scope_revoke" },
+    { "$ref": "#/definitions/agent_activity" }
+  ],
+  "definitions": {
+    "chat_message": {
+      "type": "object",
+      "description": "User's text or voice input with conversation history, sent Surface → Agent. See SPEC.md §4.1. `content` is the active message; `messages` is the full conversation context (an industry-standard array of `{role, content}` turns). The two overlap by design — the invariant `messages[-1].content == content` holds for every chat_message, though it is not expressible as a JSON Schema constraint.",
+      "required": ["type", "id", "content", "messages", "timestamp"],
+      "properties": {
+        "type": { "const": "chat_message" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4. Used as `reply_to` in responses."
+        },
+        "content": {
+          "type": "string",
+          "description": "The active message — the user's message text from speech recognition or text input."
+        },
+        "messages": {
+          "type": "array",
+          "description": "Industry-standard message array (a list of `{role, content}` turns) carrying conversation history, including the system prompt. Surfaces SHOULD include the last 30 messages. The last element's `content` equals the top-level `content`.",
+          "items": {
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Turn role. Common values: `system`, `user`, `assistant`."
+              },
+              "content": {
+                "type": "string",
+                "description": "Turn text."
+              }
+            }
+          }
+        },
+        "context": {
+          "type": "object",
+          "description": "Surface metadata. See the Context Object in SPEC.md §4.1.",
+          "properties": {
+            "surface": {
+              "type": "string",
+              "description": "Human-readable surface identifier, e.g. `ios_phone`, `macos_desktop`, `kiosk`."
+            },
+            "surface_capabilities": {
+              "type": "object",
+              "description": "Open-ended dictionary of boolean or object capabilities carrying per-message context refinements. Not enumerated."
+            },
+            "input_modality": {
+              "type": "string",
+              "enum": ["text", "voice", "touch", "gesture"],
+              "description": "How the user provided input."
+            },
+            "user_id": {
+              "type": "string",
+              "description": "User identifier (from JWT or anonymous registration)."
+            },
+            "session_id": {
+              "type": "string",
+              "description": "Session identifier for grouping related messages."
+            }
+          }
+        },
+        "appUserId": {
+          "type": "string",
+          "description": "Relay-assigned user ID for multi-user routing."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "chat_stream_chunk": {
+      "type": "object",
+      "description": "Incremental streaming response, sent Agent → Surface for each token or group of tokens as the agent generates them. See SPEC.md §4.2.",
+      "required": ["type", "reply_to", "delta", "accumulated", "timestamp"],
+      "properties": {
+        "type": { "const": "chat_stream_chunk" },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`."
+        },
+        "delta": {
+          "type": "string",
+          "description": "New text since the last chunk."
+        },
+        "accumulated": {
+          "type": "string",
+          "description": "Full response text accumulated so far, so the surface need not reconstruct the response from deltas."
+        },
+        "directives": {
+          "type": "array",
+          "description": "Optional presentation-directive track carried alongside the token stream: expression, pacing, gesture, and gaze hints keyed to a character offset in `accumulated`. Additive; see SPEC.md §4.2.1. A surface that does not understand `directives` ignores it per §10.2 and still renders `delta`/`accumulated` correctly — text rendering does not depend on this field.",
+          "items": {
+            "type": "object",
+            "required": ["at", "channel", "value"],
+            "properties": {
+              "at": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Character offset into `accumulated` at which this directive takes effect."
+              },
+              "channel": {
+                "type": "string",
+                "description": "Open taxonomy. Well-known values: `expression`, `pacing`, `gesture`, `gaze`. Implementations may define additional channels without a protocol revision."
+              },
+              "value": {
+                "type": "string",
+                "description": "Channel-defined value, e.g. an emotion tag (Appendix A) for `expression`, a pacing token like `pause_short` for `pacing`, a device/avatar-defined gesture id for `gesture`, or a gaze target like `user`/`away`/`camera` for `gaze`."
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Optional. How long the directive is intended to hold before the surface reverts to its default state, if applicable."
+              }
+            }
+          }
+        },
+        "appUserId": {
+          "type": "string",
+          "description": "Echoed from the originating message for relay routing."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "chat_stream_end": {
+      "type": "object",
+      "description": "Final message indicating a streaming response is complete, sent Agent → Surface. See SPEC.md §4.2.",
+      "required": ["type", "reply_to", "content", "timestamp"],
+      "properties": {
+        "type": { "const": "chat_stream_end" },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete final response text."
+        },
+        "model": {
+          "type": "string",
+          "description": "Identifier of the model that generated the response."
+        },
+        "finish_reason": {
+          "type": "string",
+          "enum": ["stop", "length", "error"],
+          "description": "Why generation stopped."
+        },
+        "appUserId": {
+          "type": "string",
+          "description": "Echoed for routing."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "chat_response": {
+      "type": "object",
+      "description": "Non-streaming complete response, sent Agent → Surface by agents that do not support streaming. See SPEC.md §4.2. (SPEC §4.2 gives no field table for chat_response; required fields are inferred from the chat_stream_end table and the §4.2 example.)",
+      "required": ["type", "reply_to", "content", "timestamp"],
+      "properties": {
+        "type": { "const": "chat_response" },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete response text."
+        },
+        "model": {
+          "type": "string",
+          "description": "Identifier of the model that generated the response."
+        },
+        "appUserId": {
+          "type": "string",
+          "description": "Echoed for routing."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "agent_card": {
+      "type": "object",
+      "description": "Message envelope carrying an Agent Card — the identity and capability declaration emitted by either an agent or a surface at connection time, and by the relay in response to an agent_card_request. See SPEC.md §3.3. The `card` payload conforms to schemas/agent-card.schema.json.",
+      "required": ["type", "card"],
+      "properties": {
+        "type": { "const": "agent_card" },
+        "card": {
+          "$ref": "agent-card.schema.json"
+        }
+      }
+    },
+    "agent_card_request": {
+      "type": "object",
+      "description": "Requests the other side's most recent Agent Card; the relay responds with the stored card from the other side as an agent_card message. Emitted by either an agent or a surface. See SPEC.md §3.3.",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "const": "agent_card_request" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this request."
+        }
+      }
+    },
+    "surface_agent_card": {
+      "type": "object",
+      "description": "Relay forwards a surface's Agent Card to that user's agent(s). Distinct from `agent_card` (which an agent itself sends upward) so an inbound forwarded surface card can never be mistaken for an echo of the agent's own outbound card. Sent Relay → Agent (Bridge/Desktop) only, live on card (re)declaration and replayed to a bridge that connects afterward — see SPEC.md §17.1 and §17.3.",
+      "required": ["type", "surface_id", "card", "timestamp"],
+      "properties": {
+        "type": { "const": "surface_agent_card" },
+        "surface_id": {
+          "type": "string",
+          "description": "The relay-assigned identifier (SPEC.md §18.1) of the surface this card belongs to."
+        },
+        "card": {
+          "$ref": "agent-card.schema.json"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "surface_agent_card_removed": {
+      "type": "object",
+      "description": "Relay retracts a previously-forwarded surface_agent_card when that surface disconnects, sent Relay → Agent (Bridge/Desktop) only. Sent only for a surface that had actually declared a card. See SPEC.md §17.2.",
+      "required": ["type", "surface_id", "timestamp"],
+      "properties": {
+        "type": { "const": "surface_agent_card_removed" },
+        "surface_id": {
+          "type": "string",
+          "description": "The relay-assigned identifier (SPEC.md §18.1) of the surface whose card is being retracted."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "motor_command": {
+      "type": "object",
+      "description": "Physical surface directive envelope, sent Agent → Surface. The protocol defines the message structure; the device designer defines the command vocabulary and parameters. See SPEC.md §4.5.",
+      "required": ["type", "id", "command", "timestamp"],
+      "properties": {
+        "type": { "const": "motor_command" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this command."
+        },
+        "command": {
+          "type": "string",
+          "description": "Device-defined command identifier. MUST match an entry in the device's Agent Card `available_actions`."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Device-defined parameters. Schema declared in the Agent Card per action."
+        },
+        "timing": {
+          "type": "object",
+          "description": "Execution timing. See SPEC.md §4.5.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["immediate", "queued", "synchronized"],
+              "description": "immediate: execute now (default). queued: add to the device's command queue, execute in order. synchronized: execute in sync with the chat message referenced by sync_to."
+            },
+            "delay_ms": {
+              "type": "integer",
+              "description": "Delay before execution, in milliseconds."
+            },
+            "sync_to": {
+              "type": ["string", "null"],
+              "description": "Message id to synchronize execution with, when mode is synchronized; otherwise null."
+            }
+          }
+        },
+        "safety": {
+          "type": "object",
+          "description": "Safety constraints. See SPEC.md §4.5.",
+          "properties": {
+            "requires_confirmation": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, the device sends a confirmation request to the surface before executing."
+            },
+            "timeout_ms": {
+              "type": "integer",
+              "default": 30000,
+              "description": "Time to wait for command completion before reporting failure."
+            },
+            "abort_on_error": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to halt the command queue if this command fails."
+            }
+          }
+        },
+        "reply_to": {
+          "type": "string",
+          "description": "Session or message context."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "sensor_event": {
+      "type": "object",
+      "description": "Physical surface or device sensor data envelope, sent Surface/Device → Agent. The protocol defines the message structure; the device designer defines sensor types and value schemas. See SPEC.md §4.6.",
+      "required": ["type", "id", "sensor", "value", "trigger", "timestamp"],
+      "properties": {
+        "type": { "const": "sensor_event" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4."
+        },
+        "sensor": {
+          "type": "string",
+          "description": "Device-defined sensor identifier. MUST match a declared sensor in the Agent Card."
+        },
+        "value": {
+          "description": "Sensor reading. Schema is device-defined; may be a number, string, boolean, or object. No type constraint is imposed."
+        },
+        "trigger": {
+          "type": "string",
+          "enum": ["periodic", "threshold", "event"],
+          "description": "Why this event was sent. periodic: regular device-defined intervals. threshold: a value crossed a boundary. event: a discrete occurrence happened."
+        },
+        "device_timestamp": {
+          "type": "integer",
+          "description": "Timestamp from the device's own clock (may differ from relay time)."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds (relay time)."
+        }
+      }
+    },
+    "device_action": {
+      "type": "object",
+      "description": "Structured command for headless devices, sent Relay → Device. Generated by the relay-side intelligence layer from natural language; the device receives only structured actions. See SPEC.md §4.7.",
+      "required": ["type", "id", "action", "timestamp"],
+      "properties": {
+        "type": { "const": "device_action" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4."
+        },
+        "action": {
+          "type": "string",
+          "description": "Action identifier. MUST match an entry in the device's Agent Card `available_actions`."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Action parameters. Schema defined per action in the Agent Card."
+        },
+        "source_message": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `chat_message` ID that triggered this action (for audit trail)."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "audio_stream_start": {
+      "type": "object",
+      "description": "Signals the start of an audio stream with codec metadata. Bidirectional. See SPEC.md §4.8. (SPEC §4.8 gives no field table for audio_stream_start; required fields are inferred from the example.)",
+      "required": ["type", "id", "codec", "sample_rate", "channels", "timestamp"],
+      "properties": {
+        "type": { "const": "audio_stream_start" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 stream identifier."
+        },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`, when the stream is a response. Omitted for surface-originated audio input."
+        },
+        "codec": {
+          "type": "string",
+          "description": "Audio codec, e.g. `opus`."
+        },
+        "sample_rate": {
+          "type": "integer",
+          "description": "Sample rate in Hz, e.g. 24000."
+        },
+        "channels": {
+          "type": "integer",
+          "description": "Channel count, e.g. 1 for mono."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "audio_chunk": {
+      "type": "object",
+      "description": "A single frame of streaming audio data. Bidirectional. See SPEC.md §4.8. (The SPEC §4.8 audio_chunk field table lists only data/sequence/duration_ms; `type` is required as the discriminator, and `reply_to`/`timestamp` appear in the example but are not marked required in the table.)",
+      "required": ["type", "data", "sequence", "duration_ms"],
+      "properties": {
+        "type": { "const": "audio_chunk" },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`."
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64-encoded audio frame."
+        },
+        "sequence": {
+          "type": "integer",
+          "description": "Monotonically increasing frame number. Enables out-of-order detection."
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "Duration this frame represents in milliseconds. Used for playback buffer management."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "audio_stream_end": {
+      "type": "object",
+      "description": "Signals the end of an audio stream. Bidirectional. See SPEC.md §4.8. (SPEC §4.8 gives no field table for audio_stream_end; required fields are inferred from the example.)",
+      "required": ["type", "total_duration_ms", "timestamp"],
+      "properties": {
+        "type": { "const": "audio_stream_end" },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`."
+        },
+        "total_duration_ms": {
+          "type": "integer",
+          "description": "Total duration of the completed stream in milliseconds."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "memory_sync": {
+      "type": "object",
+      "description": "Reads and writes soul file memory through the relay. Bidirectional. The relay stores soul files as opaque JSON blobs keyed by (user_id, avatar_id). See SPEC.md §4.4. (SPEC §4.4 gives no field table; the five action variants and their required fields are inferred from the examples.)",
+      "required": ["type", "action"],
+      "properties": {
+        "type": { "const": "memory_sync" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "action": { "const": "get" },
+            "avatar_id": {
+              "type": "string",
+              "description": "Memory scope. `global` is shared across all characters; character-specific IDs scope to one personality."
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID v4 request identifier."
+            }
+          },
+          "required": ["action", "avatar_id", "id"]
+        },
+        {
+          "properties": {
+            "action": { "const": "get_response" },
+            "avatar_id": {
+              "type": "string",
+              "description": "Memory scope."
+            },
+            "data": {
+              "type": "object",
+              "description": "The SoulFile JSON. Opaque to the relay."
+            },
+            "reply_to": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The id of the originating get request."
+            }
+          },
+          "required": ["action", "avatar_id", "data", "reply_to"]
+        },
+        {
+          "properties": {
+            "action": { "const": "put" },
+            "avatar_id": {
+              "type": "string",
+              "description": "Memory scope."
+            },
+            "data": {
+              "type": "object",
+              "description": "The SoulFile JSON to store. Opaque to the relay."
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID v4 request identifier."
+            }
+          },
+          "required": ["action", "avatar_id", "data", "id"]
+        },
+        {
+          "properties": {
+            "action": { "const": "put_response" },
+            "avatar_id": {
+              "type": "string",
+              "description": "Memory scope."
+            },
+            "success": {
+              "type": "boolean",
+              "description": "Whether the write succeeded."
+            },
+            "reply_to": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The id of the originating put request."
+            }
+          },
+          "required": ["action", "avatar_id", "success", "reply_to"]
+        },
+        {
+          "properties": {
+            "action": { "const": "delete" },
+            "avatar_id": {
+              "type": "string",
+              "description": "Memory scope."
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUID v4 request identifier."
+            }
+          },
+          "required": ["action", "avatar_id", "id"]
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "description": "Structured error envelope. Emitted by agents (in response to a specific message) or by the relay (for connection-level issues). See SPEC.md §4.9 and §9. The shape unifies agent-emitted and relay-emitted errors: `code` + `message` are always required; `reply_to` is optional and SHOULD be included when the error is a response to a specific message; `timestamp` is required. Additional implementation-specific extension fields are permitted per §10.2 (e.g., relay's `connection_limit_exceeded` may include `current`, `limit`, `upgrade_url`).",
+      "required": ["type", "code", "message", "timestamp"],
+      "properties": {
+        "type": { "const": "error" },
+        "code": {
+          "type": "string",
+          "description": "Standard code (e.g., 'provider_error', 'timeout', 'rate_limited', 'connection_limit_exceeded', 'authentication_failed', 'not_paired', 'unsupported_capability') or implementation-specific extension code."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error description suitable for surface display."
+        },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of the originating message this error responds to. SHOULD be included when the error is a response to a specific message; omitted for connection-level errors not tied to a specific request."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "description": "Connection lifecycle events sent by the relay to both sides. See SPEC.md §4.3.",
+      "required": ["type", "event"],
+      "properties": {
+        "type": { "const": "system" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "event": { "const": "connected" },
+            "protocol_version": {
+              "type": "string",
+              "description": "The relay's own protocol version. See SPEC.md §10.3."
+            },
+            "bridgesOnline": {
+              "type": "integer",
+              "description": "Count of bridges online, included for surfaces."
+            },
+            "surfaceId": {
+              "type": "string",
+              "description": "The relay-assigned identifier for this surface connection. Surfaces only. See SPEC.md §18.1."
+            },
+            "surfaceToken": {
+              "type": "string",
+              "description": "Opaque credential a surface SHOULD persist and present back (as the `surfaceToken` connection parameter) to receive the same surfaceId on reconnect. Present only when the relay minted or re-minted an identifier for this connection. Surfaces only. See SPEC.md §18.1."
+            }
+          },
+          "required": ["event"]
+        },
+        {
+          "properties": {
+            "event": { "const": "bridge_online" },
+            "bridgeName": {
+              "type": "string",
+              "description": "Name of the bridge that came online."
+            }
+          },
+          "required": ["event", "bridgeName"]
+        },
+        {
+          "properties": {
+            "event": { "const": "bridge_offline" },
+            "bridgeName": {
+              "type": "string",
+              "description": "Name of the bridge that went offline."
+            }
+          },
+          "required": ["event", "bridgeName"]
+        },
+        {
+          "properties": {
+            "event": { "const": "replaced" }
+          },
+          "required": ["event"]
+        }
+      ]
+    },
+    "presence": {
+      "type": "object",
+      "description": "Typing indicators and attention state. Bidirectional. See SPEC.md §4.10.",
+      "required": ["type", "state", "timestamp"],
+      "properties": {
+        "type": { "const": "presence" },
+        "state": {
+          "type": "string",
+          "enum": ["typing", "idle", "listening", "processing", "speaking"],
+          "description": "Current attention state."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "presence_update": {
+      "type": "object",
+      "description": "Ambient state broadcast from an active surface to ambient consumers via /ws/ambient. See SPEC.md §12.3. The inner `presence` payload conforms to schemas/presence_state.json. (SPEC §12.3 gives no field table; envelope required fields are inferred from the example.)",
+      "required": ["type", "agent_id", "source_surface_id", "presence"],
+      "properties": {
+        "type": { "const": "presence_update" },
+        "agent_id": {
+          "type": "string",
+          "description": "Bridge/agent identifier this presence relates to."
+        },
+        "source_surface_id": {
+          "type": "string",
+          "description": "Identifier of the active surface that emitted this presence."
+        },
+        "presence": {
+          "$ref": "presence_state.json"
+        }
+      }
+    },
+    "presence_roster": {
+      "type": "object",
+      "description": "Multi-surface attention-arbitration visibility: reports every active surface's last-known PresenceState at once, sent Relay → Agent. Additive layer on top of presence_update (§12) — does not change what presence_update means or how it is emitted. See SPEC.md §15.1.",
+      "required": ["type", "agent_id", "surfaces", "timestamp"],
+      "properties": {
+        "type": { "const": "presence_roster" },
+        "agent_id": {
+          "type": "string",
+          "description": "Bridge/agent identifier this roster relates to."
+        },
+        "surfaces": {
+          "type": "array",
+          "description": "One entry per active surface with a known presence state.",
+          "items": {
+            "type": "object",
+            "required": ["source_surface_id", "presence"],
+            "properties": {
+              "source_surface_id": {
+                "type": "string",
+                "description": "Identifier of the active surface this entry reports."
+              },
+              "surface_id": {
+                "type": "string",
+                "description": "Optional. The relay-assigned surface identifier for this connection, as minted per §18.1 (the `surfaceId` on that surface's `connected` system event). Present only when the relay can supply one for this entry; carried alongside the unrelated, self-declared `source_surface_id` rather than in place of it."
+              },
+              "presence": {
+                "$ref": "presence_state.json"
+              }
+            }
+          }
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of roster assembly."
+        }
+      }
+    },
+    "attention_floor": {
+      "type": "object",
+      "description": "Floor/yield instruction for attention arbitration, sent Agent → Relay → Surface. The relay routes by target_surface_id, matching the source_surface_id a surface reports via presence_update / presence_roster. Advisory: a surface that does not understand it ignores it per §10.2. See SPEC.md §15.3.",
+      "required": ["type", "agent_id", "target_surface_id", "directive", "timestamp"],
+      "properties": {
+        "type": { "const": "attention_floor" },
+        "agent_id": {
+          "type": "string",
+          "description": "Bridge/agent identifier issuing the directive."
+        },
+        "target_surface_id": {
+          "type": "string",
+          "description": "The source_surface_id (as used in presence_update / presence_roster) of the surface this directive addresses."
+        },
+        "directive": {
+          "type": "string",
+          "enum": ["floor", "yield"],
+          "description": "'floor': the target surface now holds the user's attention and should present, speak, or respond. 'yield': the target surface should relinquish the floor (stop speaking, mute output, defer to another surface) — colloquially, 'duck'."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional free-text or short code explaining the directive (e.g. 'user_engaged', 'higher_priority_surface', 'handoff_requested'). Informational only."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp."
+        }
+      }
+    },
+    "agent_notification": {
+      "type": "object",
+      "description": "An agent-initiated message asking to reach the user, sent Bridge/Desktop → Relay → Surface. Routed by the relay based on urgency and target surface. See SPEC.md §4.13 and §13 Initiative. (SPEC §4.13 gives no field table; required fields are inferred from the example and prose — `warrant` is a SHOULD, `if_unanswered` is optional.)",
+      "required": ["type", "message_id", "agent_id", "urgency", "summary"],
+      "properties": {
+        "type": { "const": "agent_notification" },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID identifying this notification. Echoed by agent_notification_response."
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "Identifier of the agent reaching out."
+        },
+        "urgency": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Rendering hint. low: silent banner / notification-center entry, respects DND. medium: notification with sound, respects DND. high: ring-through UI, bypasses DND."
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Short summary (max 140 chars)."
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Optional longer body (max 1000 chars)."
+        },
+        "require_response": {
+          "type": "boolean",
+          "description": "Whether the agent expects a user response."
+        },
+        "ring_timeout_seconds": {
+          "type": "integer",
+          "description": "For high-urgency ring-through, how long to ring before timing out."
+        },
+        "warrant": {
+          "type": "string",
+          "enum": ["user_authorized", "task_decision_required", "external_event", "unspecified"],
+          "default": "unspecified",
+          "description": "Why the agent is reaching out. SHOULD be declared on every agent-initiated message. `urgency` is a rendering hint; `warrant` is the structured reason. See SPEC.md §13."
+        },
+        "if_unanswered": { "$ref": "#/definitions/if_unanswered_stakes" },
+        "conversation_handoff": {
+          "type": "boolean",
+          "description": "Whether answering should hand off into a full conversation."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp. Note: agent_notification uses an ISO-8601 string timestamp, unlike the epoch-millis integer timestamp used by most APP messages."
+        },
+        "target_surface": {
+          "type": "string",
+          "description": "Class identifier for the target surface. Well-known values: 'phone', 'tablet', 'watch', 'desktop', 'car' (in-vehicle surfaces — Apple CarPlay, Android Auto, in-vehicle infotainment, aftermarket head units), 'smart_speaker', 'kiosk', 'ambient'. Reserved routing values: 'auto' (relay routes based on presence and capability), 'all' (broadcast to every connected surface paired to this agent). Surfaces declare their class via the top-level `surface_class` field on their Agent Card; the relay routes by string match. Implementations may use additional class names — new surface categories do not require protocol changes. See SPEC.md §4.13 and §5.4."
+        },
+        "options": {
+          "type": "array",
+          "description": "Optional structured response choices the surface MAY render as discrete selectable actions. Per-option fields beyond id/label are reserved for additive extension; unrecognized fields are ignored. See SPEC.md §4.13.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "description": "Stable id echoed back in agent_notification_response.chosen_option." },
+              "label": { "type": "string", "description": "Human-readable choice text the surface displays or speaks." }
+            },
+            "required": ["id", "label"]
+          }
+        }
+      }
+    },
+    "agent_notification_response": {
+      "type": "object",
+      "description": "Surface reply to an agent_notification, sent Surface → Relay → Bridge/Desktop only. See SPEC.md §4.13. (SPEC §4.13 gives no field table; required fields are inferred from the example.)",
+      "required": ["type", "message_id", "result"],
+      "properties": {
+        "type": { "const": "agent_notification_response" },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The message_id of the agent_notification being answered."
+        },
+        "result": {
+          "type": "string",
+          "enum": ["answered", "declined", "dismissed", "unavailable", "error"],
+          "description": "Outcome of the notification."
+        },
+        "user_response": {
+          "type": "string",
+          "description": "The user's reply. Present when result is `answered` with a text or speech reply."
+        },
+        "conversation_id": {
+          "type": "string",
+          "description": "Conversation identifier. Present when conversation_handoff was requested and the user answered."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable failure detail. Present when result is `error`."
+        },
+        "chosen_option": {
+          "type": "string",
+          "description": "The id of the selected option, present only when result is 'answered' via an option selection; absent for free-text answers, declines, dismissals, timeouts, and errors."
+        },
+        "decision": {
+          "type": "object",
+          "description": "Additive, optional structured allow/deny answer with scope, for approval-shaped notifications. See SPEC.md §4.13 'Structured decisions'. Present only when the surface declares capabilities.initiation.supports_decision on its Agent Card; an agent that does not see that flag MUST fall back to user_response / chosen_option instead of relying on this field (mandated fallback, §4.13).",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["allow", "deny"],
+              "description": "The user's decision on the underlying request."
+            },
+            "scope": {
+              "type": "string",
+              "enum": ["once", "session", "always"],
+              "description": "How long the decision applies: this instance only, the remainder of the current session, or a standing decision until revoked."
+            }
+          }
+        }
+      }
+    },
+    "agent_notification_already_resolved": {
+      "type": "object",
+      "description": "Relay tells a late-answering surface that the agent_notification it just answered was already resolved by another surface's answer or by ring timeout. Sent Relay → Surface only; distinct from agent_notification_response (Surface → Relay → Bridge/Desktop only) so an inbound relay-originated message can never be mistaken for an echo of the surface's own outbound answer. See SPEC.md §4.13 'Late answers'.",
+      "required": ["type", "message_id", "resolved_result"],
+      "properties": {
+        "type": { "const": "agent_notification_already_resolved" },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The message_id of the agent_notification the late surface answered."
+        },
+        "resolved_result": {
+          "type": "string",
+          "enum": ["answered", "declined", "dismissed", "unavailable", "error"],
+          "description": "The result that actually resolved this notification first (from whichever surface answered first, or unavailable if it resolved by ring timeout), for the late surface's own information."
+        }
+      }
+    },
+    "agent_notification_late_response": {
+      "type": "object",
+      "description": "Relay tells the originating Bridge/Desktop that a second surface answered an agent_notification after it was already resolved (by another surface's answer, or by ring timeout). Additive; sent Relay → Bridge/Desktop alongside the ordinary first-answer-wins agent_notification_response, never in place of it. See SPEC.md §4.13 'Late answers'.",
+      "required": ["type", "message_id", "resolved_by_surface_id", "resolved_result", "late_surface_id", "late_result"],
+      "properties": {
+        "type": { "const": "agent_notification_late_response" },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The message_id of the agent_notification this concerns."
+        },
+        "resolved_by_surface_id": {
+          "type": ["string", "null"],
+          "description": "The surface_id (SPEC.md §18.1) of the surface whose answer actually resolved the notification, or null if it instead resolved by ring timeout with no answer."
+        },
+        "resolved_result": {
+          "type": "string",
+          "enum": ["answered", "declined", "dismissed", "unavailable", "error"],
+          "description": "The result value that actually resolved the notification."
+        },
+        "late_surface_id": {
+          "type": "string",
+          "description": "The surface_id (SPEC.md §18.1) of the surface whose answer arrived after resolution."
+        },
+        "late_result": {
+          "type": "string",
+          "enum": ["answered", "declined", "dismissed", "unavailable", "error"],
+          "description": "The result the late surface sent."
+        },
+        "late_user_response": {
+          "type": "string",
+          "description": "The late surface's user_response, if it sent one."
+        },
+        "conversation_id": {
+          "type": "string",
+          "description": "The late surface's conversation_id, if it sent one."
+        }
+      }
+    },
+    "agent_initiated_message": {
+      "type": "object",
+      "description": "A non-interruptive async message from an agent, sent Bridge/Desktop → Relay → Surface; routed to all online surfaces as a regular chat_message with agent_initiated: true set. See SPEC.md §4.13. (SPEC §4.13 gives no field table; required fields are inferred from the example.)",
+      "required": ["type", "message_id", "agent_id", "body"],
+      "properties": {
+        "type": { "const": "agent_initiated_message" },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID identifying this message."
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "Identifier of the agent sending the message."
+        },
+        "body": {
+          "type": "string",
+          "description": "Full message text."
+        },
+        "thread_id": {
+          "type": "string",
+          "description": "Optional thread identifier for conversation continuation."
+        }
+      }
+    },
+    "agent_initiated_message_response": {
+      "type": "object",
+      "description": "Relay tells the sending Bridge/Desktop that an agent_initiated_message could not be delivered because no surface is currently connected. Additive: establishes a response contract agent_initiated_message previously had none of. Sent only on this failure path in this revision; there is no success acknowledgment yet. See SPEC.md §4.13.",
+      "required": ["type", "message_id", "agent_id", "result"],
+      "properties": {
+        "type": { "const": "agent_initiated_message_response" },
+        "message_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The message_id of the agent_initiated_message this concerns."
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "The agent_id echoed from the originating agent_initiated_message."
+        },
+        "result": {
+          "type": "string",
+          "enum": ["unavailable"],
+          "description": "\"unavailable\" in this revision — no surface was connected to receive the message. Not a closed enum long-term; a future revision may add further values (e.g. an explicit success acknowledgment)."
+        },
+        "error": {
+          "type": "string",
+          "description": "Human-readable detail. Present when result is unavailable."
+        }
+      }
+    },
+    "set_dnd": {
+      "type": "object",
+      "description": "Surface or Bridge tells the relay whether the user is in Do Not Disturb; the relay uses this to filter low/medium urgency notifications. Sent Surface or Bridge → Relay. See SPEC.md §4.13.",
+      "required": ["type", "enabled"],
+      "properties": {
+        "type": { "const": "set_dnd" },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether Do Not Disturb is active."
+        }
+      }
+    },
+    "if_unanswered_stakes": {
+      "type": "object",
+      "description": "Optional structured stakes attached to an agent-initiated message. See SPEC.md §13.",
+      "required": ["kind"],
+      "oneOf": [
+        {
+          "properties": {
+            "kind": { "const": "proceeds_with_default" },
+            "default": { "type": "string" },
+            "after_seconds": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["kind", "default", "after_seconds"]
+        },
+        {
+          "properties": {
+            "kind": { "const": "blocks_until_answered" },
+            "blocking_resource": { "type": "string" }
+          },
+          "required": ["kind", "blocking_resource"]
+        },
+        {
+          "properties": {
+            "kind": { "const": "safe_to_ignore" }
+          },
+          "required": ["kind"]
+        },
+        {
+          "properties": {
+            "kind": { "const": "reverts_at" },
+            "deadline": { "type": "string", "format": "date-time" }
+          },
+          "required": ["kind", "deadline"]
+        }
+      ]
+    },
+    "artifact_create": {
+      "type": "object",
+      "description": "Delivers a rich content artifact (document, code, table, image, structured data) that the surface renders alongside conversation, sent Agent → Surface. Artifacts are persistent objects stored on the relay. See SPEC.md §4.11. (SPEC §4.11 tables the nested artifact.* fields; top-level required fields are inferred from the example.)",
+      "required": ["type", "id", "artifact", "timestamp"],
+      "properties": {
+        "type": { "const": "artifact_create" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this message."
+        },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `chat_message`."
+        },
+        "artifact": {
+          "type": "object",
+          "description": "The artifact payload.",
+          "required": ["artifact_id", "title", "content_type", "content"],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Persistent ID for this artifact. Used for updates and cross-surface access."
+            },
+            "title": {
+              "type": "string",
+              "description": "Display title for the artifact."
+            },
+            "content_type": {
+              "type": "string",
+              "enum": ["markdown", "code", "table", "image", "html", "json"],
+              "description": "MIME-like artifact type."
+            },
+            "content": {
+              "type": "string",
+              "description": "The artifact body. For `code`, language is in metadata. For `image`, a URL or base64 data. For `table`, a JSON array of rows."
+            },
+            "metadata": {
+              "type": "object",
+              "description": "Additional metadata.",
+              "properties": {
+                "language": {
+                  "type": "string",
+                  "description": "Source language, for code artifacts."
+                },
+                "version": {
+                  "type": "integer",
+                  "description": "Artifact version."
+                },
+                "created_at": {
+                  "type": "integer",
+                  "description": "Unix epoch milliseconds when the artifact was created."
+                }
+              }
+            }
+          }
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "artifact_update": {
+      "type": "object",
+      "description": "Updates an existing artifact in-place, sent Agent → Surface. See SPEC.md §4.11. (SPEC §4.11 gives no field table for artifact_update; required fields are inferred from the example.)",
+      "required": ["type", "id", "artifact_id", "changes", "timestamp"],
+      "properties": {
+        "type": { "const": "artifact_update" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this message."
+        },
+        "artifact_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the existing artifact to update."
+        },
+        "changes": {
+          "type": "object",
+          "description": "The fields to replace on the artifact. Typically `content` and/or `metadata`.",
+          "properties": {
+            "content": {
+              "type": "string",
+              "description": "Replacement artifact body."
+            },
+            "metadata": {
+              "type": "object",
+              "description": "Replacement or merged metadata, e.g. an incremented `version`."
+            }
+          }
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "artifact_request": {
+      "type": "object",
+      "description": "Surface requests a previously created artifact by ID, sent Surface → Agent or Relay. See SPEC.md §4.11. (SPEC §4.11 gives no field table for artifact_request; required fields are inferred from the example, which carries no timestamp.)",
+      "required": ["type", "id", "artifact_id"],
+      "properties": {
+        "type": { "const": "artifact_request" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this message."
+        },
+        "artifact_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the artifact being requested."
+        }
+      }
+    },
+    "agent_list_request": {
+      "type": "object",
+      "description": "Requests the list of all agents currently online for this user, sent Surface → Relay. See SPEC.md §4.12. (SPEC §4.12 gives no field table; required fields are inferred from the example, which carries no timestamp.)",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "const": "agent_list_request" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this request."
+        }
+      }
+    },
+    "agent_list_response": {
+      "type": "object",
+      "description": "Returns all online agents with their Agent Cards, sent Relay → Surface. See SPEC.md §4.12. (SPEC §4.12 gives no field table; required fields are inferred from the example, which carries no timestamp.)",
+      "required": ["type", "reply_to", "agents"],
+      "properties": {
+        "type": { "const": "agent_list_response" },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The `id` of the originating `agent_list_request`."
+        },
+        "agents": {
+          "type": "array",
+          "description": "Online agents for this user.",
+          "items": {
+            "type": "object",
+            "required": ["bridge_id", "bridge_name", "online", "agent_card"],
+            "properties": {
+              "bridge_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Bridge identifier."
+              },
+              "bridge_name": {
+                "type": "string",
+                "description": "Human-readable bridge name."
+              },
+              "online": {
+                "type": "boolean",
+                "description": "Whether the agent is currently online."
+              },
+              "agent_card": {
+                "$ref": "agent-card.schema.json"
+              }
+            }
+          }
+        }
+      }
+    },
+    "aggregator_subscribe": {
+      "type": "object",
+      "description": "Connect-time subscription declaration emitted by a bridge with agent_role='aggregator'. Sent immediately after the relay acknowledges the Agent Card and before any other traffic. Immutable for the life of the connection in v0.3 (mutation deferred to v0.4). At least one of fleet_tags or bridge_ids must be present; both may be present and compose as union. See SPEC.md §14.4.",
+      "required": ["type", "id", "timestamp"],
+      "properties": {
+        "type": { "const": "aggregator_subscribe" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 message identifier."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds when the aggregator sends this message."
+        },
+        "fleet_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Fleet tags to subscribe to. Bridges whose device.fleet_tags intersect this set are fanned to this aggregator (SPEC §14.5)."
+        },
+        "bridge_ids": {
+          "type": "array",
+          "items": { "type": "string", "format": "uuid" },
+          "minItems": 1,
+          "description": "Explicit bridge UUIDs to subscribe to. Fallback for narrow, debugging, or non-fleet integrations. Combined with fleet_tags via union when both are present."
+        }
+      },
+      "anyOf": [
+        { "required": ["fleet_tags"] },
+        { "required": ["bridge_ids"] }
+      ]
+    },
+    "file_upload_scope": {
+      "type": "object",
+      "description": "Declared, revocable grant governing what the agent may do with an uploaded file and for how long. Not a message type on its own — embedded in file_upload.file.scope. See SPEC.md §16.4.",
+      "required": ["usage", "duration"],
+      "properties": {
+        "usage": {
+          "type": "string",
+          "enum": ["process", "retain"],
+          "description": "'process': the agent may read the file to fulfill the immediate request and MUST delete its local materialized copy once that request completes, or duration elapses, whichever is sooner. 'retain': the agent may keep the materialized copy available for reuse across later turns within duration."
+        },
+        "duration": {
+          "type": "string",
+          "enum": ["single_use", "session", "ttl"],
+          "description": "'single_use': valid for exactly one agent action; MUST be deleted immediately after. 'session': valid for the lifetime of the current conversation/session; MUST be deleted when the session ends. 'ttl': valid until expires_at. There is no indefinite/until-revoked duration — every grant self-expires even absent an explicit file_scope_revoke."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Required when duration is 'ttl'. ISO-8601 timestamp after which the agent MUST delete the file."
+        }
+      },
+      "oneOf": [
+        { "properties": { "duration": { "const": "single_use" } } },
+        { "properties": { "duration": { "const": "session" } } },
+        { "properties": { "duration": { "const": "ttl" } }, "required": ["expires_at"] }
+      ]
+    },
+    "file_upload": {
+      "type": "object",
+      "description": "A file arriving at a surface (dropped, picked, photographed, or recorded) and travelling to the agent, sent Surface → Agent or Relay. Distinct from artifact_create/artifact_update (Agent → Surface) and artifact_request (Surface → Agent or Relay, requests an existing artifact by id) — this is the only APP message type carrying a file in the surface-to-agent direction. Requires the receiving agent to have declared capabilities.supports_file_upload (agent-card.schema.json). See SPEC.md §16.1.",
+      "required": ["type", "id", "file", "timestamp"],
+      "properties": {
+        "type": { "const": "file_upload" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this message."
+        },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The id of the chat_message this upload accompanies, if any."
+        },
+        "file": {
+          "type": "object",
+          "description": "The file's metadata, transport, and scope grant.",
+          "required": ["file_id", "filename", "content_type", "size_bytes", "scope"],
+          "properties": {
+            "file_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Persistent identifier for this file. Echoed by file_upload_response and used by file_scope_revoke."
+            },
+            "filename": {
+              "type": "string",
+              "description": "Original filename as captured at the surface (drop, picker, camera, or recorder)."
+            },
+            "content_type": {
+              "type": "string",
+              "description": "A real MIME type (e.g. 'image/jpeg', 'application/pdf', 'audio/wav'). Unlike artifact.content_type (§4.11), this is not a closed enum."
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Declared size of the file in bytes, regardless of transport. The agent MUST use this to decide whether to accept before fetching or decoding content/content_ref. See SPEC.md §16.2."
+            },
+            "checksum": {
+              "type": "string",
+              "description": "Optional integrity check, e.g. 'sha256:<hex>'. RECOMMENDED when content_ref is used, since the bytes travel outside this message."
+            },
+            "content": {
+              "type": "string",
+              "description": "Base64-encoded file content, present when the file travels inline. At least one of content / content_ref is required. See SPEC.md §16.2."
+            },
+            "content_ref": {
+              "type": "object",
+              "description": "Reference to fetch the file content out of band, present when the file is not sent inline. Deliberately transport-agnostic: the URI scheme and who hosts it (relay-mediated or point-to-point) is not specified here. See SPEC.md §16.2 and §16.7.",
+              "required": ["uri"],
+              "properties": {
+                "uri": {
+                  "type": "string",
+                  "description": "Locator the agent (or the relay on the agent's behalf) resolves to obtain the file content."
+                },
+                "expires_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Optional expiry after which the reference is no longer guaranteed resolvable."
+                }
+              }
+            },
+            "scope": { "$ref": "#/definitions/file_upload_scope" }
+          },
+          "anyOf": [
+            { "required": ["content"] },
+            { "required": ["content_ref"] }
+          ]
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "file_upload_response": {
+      "type": "object",
+      "description": "Agent's accept-or-reject answer to a file_upload, sent Agent → Relay → Surface, or Relay → Surface directly if the relay itself enforces a limit before forwarding (payload-routing dependent — see SPEC.md §16.7). Every file_upload gets one; a surface MUST NOT treat silence as acceptance. See SPEC.md §16.3.",
+      "required": ["type", "id", "reply_to", "file_id", "result", "timestamp"],
+      "properties": {
+        "type": { "const": "file_upload_response" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this message."
+        },
+        "reply_to": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The id of the file_upload being answered."
+        },
+        "file_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The file_id from the file_upload.file being answered."
+        },
+        "result": {
+          "type": "string",
+          "enum": ["accepted", "rejected"],
+          "description": "'accepted' means the agent will materialize (or has materialized) the file under exactly the scope declared in the originating file_upload — this specification defines no renegotiation of scope terms."
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["too_large", "unsupported_content_type", "scope_declined", "unavailable", "error"],
+          "description": "Required when result is 'rejected'. 'too_large': size_bytes exceeds this agent's declared or effective limit. 'unsupported_content_type': content_type is not one this agent can use. 'scope_declined': the agent will not accept the declared usage/duration terms. 'unavailable': the agent cannot materialize the file right now (e.g. no working directory available). 'error': any other failure."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Optional human-readable elaboration on reason."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      },
+      "oneOf": [
+        { "properties": { "result": { "const": "accepted" } } },
+        { "properties": { "result": { "const": "rejected" } }, "required": ["reason"] }
+      ]
+    },
+    "file_scope_revoke": {
+      "type": "object",
+      "description": "Revokes a previously granted file_upload scope before its duration would otherwise lapse, sent Surface → Agent or Relay. The agent MUST immediately stop using the file, delete its materialized local copy (and any copy retained under usage: 'retain'), and MUST NOT act on the file further. See SPEC.md §16.5.",
+      "required": ["type", "id", "file_id", "timestamp"],
+      "properties": {
+        "type": { "const": "file_scope_revoke" },
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID v4 for this message."
+        },
+        "file_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The file_id of the file_upload grant being revoked."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      }
+    },
+    "agent_activity": {
+      "type": "object",
+      "description": "Agent-sourced working-state indicator, sent Agent (Bridge/Desktop) → Relay → Surface. Distinct from presence (§4.10, bidirectional but routing-less and contract-less) and presence_update (§12.3, surface-emitted, describes the user's state, cached per user for /ws/ambient) — agent_activity describes the agent's own work, is never cached alongside PresenceState, and is never sent on /ws/ambient. Every start MUST eventually be matched by exactly one clear with the same task_id; see SPEC.md §19 for the full clear-on-finish contract, including the relay's disconnect-triggered fallback (§19.4.2) and the surface-side ttl_seconds floor (§19.4.4) that exist precisely for the case where the agent that sent start never gets to send clear. 'progress' (§19.2.1) is a third event carrying an updated label for a start already announced, correlated by the same task_id; it carries no new capability flag, is gated by the same supports_agent_activity, and a progress for a task_id not currently outstanding MUST be ignored by both relay and surface without creating any tracking state.",
+      "required": ["type", "event", "task_id", "agent_id", "timestamp"],
+      "properties": {
+        "type": { "const": "agent_activity" },
+        "event": {
+          "type": "string",
+          "enum": ["start", "progress", "clear"],
+          "description": "'start': the agent has begun a unit of work. 'progress': a label update for work already announced by a start with the same task_id, carrying no additional speech; see SPEC.md §19.2.1. 'clear': a previously-started unit of work reached a terminal state."
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Identifier correlating a progress or a clear to the start it belongs to. Opaque, agent-assigned; unique among the agent's currently-outstanding activities for the user. See SPEC.md §19.3."
+        },
+        "agent_id": {
+          "type": "string",
+          "description": "Bridge/agent identifier this activity belongs to."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable description of the work (e.g. a tool name or short phrase). Required when event is 'start' or 'progress'; not present on 'clear'. On 'progress' this is the updated description, superseding the label from 'start' or from any earlier 'progress' for the same task_id."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["tool_call", "background_task", "reasoning", "other"],
+          "description": "Rendering hint, meaningful only on 'start'. Absence is equivalent to 'other'. Purely advisory — see SPEC.md §19.7. Not meaningful on 'progress': the rendering category is set once at 'start' and is not re-litigated by a label update; a conformant surface ignores this field in that position."
+        },
+        "reply_to": {
+          "type": "string",
+          "description": "The id of the chat_message this work is directly answering, when the work is turn-scoped rather than a standing background task. Meaningful only on 'start'. See SPEC.md §19.3. Not meaningful on 'progress': the correlation to the originating turn is already established at 'start' and carried forward by task_id."
+        },
+        "ttl_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Self-expiry floor in seconds, meaningful on 'start' or 'progress'. If no matching clear, refreshing start, or progress for the same task_id arrives within this window, a surface MUST treat the activity as stale and clear it locally. A 'progress' resets this window on receipt (using its own ttl_seconds if present, otherwise the previously-established value) exactly as a refreshing start does; it has no effect on the relay's disconnect grace window. See SPEC.md §19.4.4 and §19.2.1."
+        },
+        "target_surface": {
+          "type": "string",
+          "description": "Same semantics as agent_notification.target_surface (§4.13): a surface-class string, or the reserved values 'auto'/'all'. Meaningful on 'start' or 'progress'. Absent is equivalent to 'all'."
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["completed", "failed", "cancelled", "expired"],
+          "description": "Why the work ended. Required when event is 'clear'; not present on 'start' or 'progress'."
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix epoch milliseconds."
+        }
+      },
+      "oneOf": [
+        { "properties": { "event": { "const": "start" } }, "required": ["label"] },
+        { "properties": { "event": { "const": "progress" } }, "required": ["label"] },
+        { "properties": { "event": { "const": "clear" } }, "required": ["reason"] }
+      ]
+    }
+  }
+}
