@@ -312,6 +312,10 @@
           "type": "object",
           "description": "Device-defined parameters. Schema declared in the Agent Card per action."
         },
+        "relay_surface_id": {
+          "type": "string",
+          "description": "The relay-assigned surfaceId (SPEC.md §18.1) of the one connected surface this command addresses. Optional; when present it takes precedence over any target_surface class field. Distinct from the self-declared source_surface_id (§12.3). An id that names no currently-connected surface yields a not_paired error to the sending agent. See SPEC.md §4.5."
+        },
         "timing": {
           "type": "object",
           "description": "Execution timing. See SPEC.md §4.5.",
@@ -614,7 +618,7 @@
         "type": { "const": "error" },
         "code": {
           "type": "string",
-          "description": "Standard code (e.g., 'provider_error', 'timeout', 'rate_limited', 'connection_limit_exceeded', 'authentication_failed', 'not_paired', 'unsupported_capability') or implementation-specific extension code."
+          "description": "Standard code (e.g., 'provider_error', 'timeout', 'rate_limited', 'connection_limit_exceeded', 'authentication_failed', 'not_paired', 'unsupported_capability', 'no_matching_surface', 'agent_offline') or implementation-specific extension code."
         },
         "message": {
           "type": "string",
