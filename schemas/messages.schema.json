@@ -849,7 +849,7 @@
         },
         "target_surface": {
           "type": "string",
-          "description": "Class identifier for the target surface. Well-known values: 'phone', 'tablet', 'watch', 'desktop', 'car' (in-vehicle surfaces — Apple CarPlay, Android Auto, in-vehicle infotainment, aftermarket head units), 'smart_speaker', 'kiosk', 'ambient'. Reserved routing values: 'auto' (relay routes based on presence and capability), 'all' (broadcast to every connected surface paired to this agent). Surfaces declare their class via the top-level `surface_class` field on their Agent Card; the relay routes by string match. Implementations may use additional class names — new surface categories do not require protocol changes. See SPEC.md §4.13 and §5.4."
+          "description": "Class identifier for the target surface. Well-known values: 'phone', 'tablet', 'watch', 'desktop', 'car' (in-vehicle surfaces — Apple CarPlay, Android Auto, in-vehicle infotainment, aftermarket head units), 'smart_speaker', 'kiosk', 'ambient'. Reserved routing values: 'auto' (relay routes based on presence and capability), 'all' (broadcast to every connected surface paired to this agent). Surfaces declare their class via the top-level `surface_class` field on their Agent Card; the relay routes by string match. Implementations may use additional class names — new surface categories do not require protocol changes. Absent is equivalent to 'auto', not 'all' (SPEC.md §4.13, overriding §2.3 rule 2's broadcast default). urgency 'high' widens an absent or 'auto' target to a broadcast but never widens an explicit class target. See SPEC.md §4.13 and §5.4."
         },
         "options": {
           "type": "array",
