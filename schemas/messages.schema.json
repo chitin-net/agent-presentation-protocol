@@ -618,7 +618,7 @@
         "type": { "const": "error" },
         "code": {
           "type": "string",
-          "description": "Standard code (e.g., 'provider_error', 'timeout', 'rate_limited', 'connection_limit_exceeded', 'authentication_failed', 'not_paired', 'unsupported_capability', 'no_matching_surface', 'agent_offline') or implementation-specific extension code."
+          "description": "Standard code (e.g., 'provider_error', 'timeout', 'rate_limited', 'connection_limit_exceeded', 'authentication_failed', 'not_paired', 'unsupported_capability', 'no_matching_surface', 'agent_offline', 'invalid_message') or implementation-specific extension code."
         },
         "message": {
           "type": "string",
