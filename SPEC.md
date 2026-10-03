@@ -1884,6 +1884,10 @@ The protocol's stance on initiative is the difference between a notification sys
 
 ## 14. Fleet Aggregator
 
+**Implementation status.** No implementation of this section exists anywhere yet — not the reference relay, not the reference bridge, not any reference surface — so an adopter building against §14 today would be first. The relay-side fan-in described in §14.4 through §14.9 is the specific gap: no known relay resolves an `aggregator_subscribe`, matches members by `fleet_tags` or `bridge_ids`, or fans a member's `sensor_event` to a subscribed aggregator. An agent may declare `agent_role: "aggregator"` and send a subscription today, and a relay that does not implement this section will forward or ignore it without fanning anything in.
+
+A conformance suite covering §14.4 through §14.9 exists and currently fails against every implementation, which is the expected result and is recorded here so the failures are not mistaken for regressions.
+
 ### 14.1 Overview
 
 A **Fleet Aggregator** is an APP agent that fan-ins events from many bridges under the same user and presents itself to that user's surfaces as a single conversational agent — an interpreter and spokesperson for its fleet. The aggregator lets one agent subscribe to "all bridges tagged `irrigation` under this user," consume their `sensor_event` (§4.6) streams, dispatch `device_action` (§4.7) to specific members by `target_agent` (§4.12), and initiate to the user with `agent_notification` (§4.13) when the fleet collectively warrants attention.

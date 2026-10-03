@@ -48,6 +48,8 @@ implementation built against the earlier text needs updating:
 
 ### Noted
 
+- §14 Fleet Aggregator now carries an **Implementation status** note, matching the one §16 has had since it was added. No implementation of §14's relay-side fan-in exists anywhere — no known relay resolves an `aggregator_subscribe`, matches members by `fleet_tags`/`bridge_ids`, or fans a member's `sensor_event` to a subscriber. A conformance suite for §14.4-§14.9 exists and fails against every implementation; the note records that as expected rather than as a regression. No normative text changed.
+
 - §4.5 `motor_command`: added a clarifying paragraph stating that the type name's "motor" does not constrain `command` to locomotion or actuated movement; the field table already granted a fully device-defined vocabulary. Documentation-only. See SPEC.md §4.5.
 - §16.3: which surface receives a `file_upload_response` when several are connected is not specified, and this revision does not resolve it; §16.3 now says so explicitly.
 - §16 gains an implementation-status note: no implementation of Surface-to-Agent File Upload exists anywhere yet — not the reference relay, not the reference bridge, not any reference surface. No normative or wire content changed. See SPEC.md §16.
